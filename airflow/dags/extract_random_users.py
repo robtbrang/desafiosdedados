@@ -197,7 +197,7 @@ def _load_bigquery(tablename: str, ti:dict) -> None:
             bigquery.SchemaField("location_street_number", "INTEGER"),
             bigquery.SchemaField("location_street_name", "STRING"),
             bigquery.SchemaField("location_city", "STRING"),
-            bigquery.SchemaField("location_tate", "STRING"),
+            bigquery.SchemaField("location_state", "STRING"),
             bigquery.SchemaField("location_country", "STRING"),
             bigquery.SchemaField("location_postcode", "STRING"),
             bigquery.SchemaField("location_coordinates_latitude", "STRING"),
