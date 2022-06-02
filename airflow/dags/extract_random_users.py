@@ -22,12 +22,24 @@ default_args = {
     'schedule_interval': '@daily'
 }
 
-def upload_to_bucket(bucket_name, file_path, file_key): 
+def upload_to_bucket(bucket_name: str, file_path: str, file_key=None) -> None:
+    """
+    Funcao criada para fazer upload de arquivos (objetos) para um bucket no Cloud Storage.
+
+    :param str bucket_name: Nome do bucket dentro do Cloud Storage.
+    :param str file_path: Caminho local do arquivo (objeto) que sera carregado no Storage.
+    :param file_key: Caminho do objeto dentro do bucket.
+
+    :return: None
+    :rtype: None
+    """
+    # Carregando credenciais
     pk_path = Variable.get('etl_extract_users_pk')
     credentials = service_account.Credentials.from_service_account_file(pk_path)
 
     file_key_name = (file_path if (file_key==None) else file_key)
 
+    # Conectando ao Client do Storage e realizando o upload do arquivo
     try:
         client = storage.Client(credentials=credentials)
         bucket = client.get_bucket(bucket_name)
@@ -36,15 +48,27 @@ def upload_to_bucket(bucket_name, file_path, file_key):
     except Exception as e:
         raise AirflowException(f"[ERROR] Erro no upload do arquivo: {e}")
 
-def _extract_data_api(url, ti):
+def _extract_data_api(url: str, ti: dict) -> str:
+    """
+    Funcao criada para extrair dados diretamente da API, salvar em um arquivo json na maquina local do Cloud Composer.
+    E fazer upload no Cloud Storage do arquivo json com os dados da extracao.
+
+    :param url: Url de requisicao da API. Essa informacao esta configurada nas variaveis (variables) do Cloud Composer.
+    :param ti: Dicionario com os parametros referente a Task Instance (TI) das outras funcoes para disponibilizar variaveis de uma funcao para outra.
+
+    :return: String com o nome do caminho do arquivo json dentro do Cloud Storage.
+    :rtype: str 
+    """
     import requests
     import json
 
+    # Request da API
     params= 'results'
     qtd_requests = Variable.get('etl_extract_users_requests')
 
     response = requests.get(f'{url}/?{params}={qtd_requests}')
     data_json = response.json()
+
     # Recuperando a data e hora da execução
     date = datetime.datetime.now().strftime("%Y-%m-%d_%H_%M")
 
@@ -52,6 +76,7 @@ def _extract_data_api(url, ti):
     if not os.path.exists(local_path):
         os.makedirs(local_path)
 
+    # Criando o arquivo json localmente
     filename_json = f'{local_path}{date}_random_users.json'
 
     with open(filename_json, 'w+') as f:
@@ -66,21 +91,31 @@ def _extract_data_api(url, ti):
 
     ti.xcom_push(key='bucket-file-json', value=bucket_file)
 
-def _transform_data(ti):
+def _transform_data(ti: dict) -> str:
+    """
+    Funcao criada para transformar o arquivo json em um csv preparando-o para ser escrito no BigQuery.
+
+    :param ti: Dicionario com os parametros referente a Task Instance (TI) das outras funcoes para disponibilizar variaveis de uma funcao para outra.
+
+    :return: String com o nome do caminho do arquivo csv dentro do Cloud Storage.
+    :rtype: str 
+    """
     import pandas as pd
     import json
-    import shutil
     import time
 
+    # Carregando credenciais
     pk_path = Variable.get('etl_extract_users_pk')
     credentials = service_account.Credentials.from_service_account_file(pk_path)
 
+    # Buscando variaveis para upload do arquivo (objeto) no Storage
     bucket_name = Variable.get('etl_extract_users_bucket')
     json_object_key = ti.xcom_pull(key='bucket-file-json', task_ids='extract_data_random_user')
     bucket_key= json_object_key.replace(f"{bucket_name}/","")
     
     local_path = Variable.get('etl_extract_users_file_path')
 
+    # Fazendo um download do arquivo json que esta no Storage
     try:
         client = storage.Client(credentials=credentials)
         bucket = client.get_bucket(bucket_name)
@@ -100,6 +135,7 @@ def _transform_data(ti):
     json_data = json.load(file_json)
     file_json.close()
 
+    # Convertendo em Pandas Dataframe para escrever em CSV
     df_data = pd.json_normalize(json_data, record_path='results')
     
     # Checando a existência do diretório local para armazenar o .csv
@@ -108,6 +144,7 @@ def _transform_data(ti):
     if not os.path.exists(local_path_csv):
         os.makedirs(local_path_csv)
 
+    # Convertendo JSON para CSV
     csv_name = local_filepath.split("/")[-1]
     file_csv_name = f"{csv_name}.csv"
     full_path_csv = f"{local_path_csv}/{file_csv_name}"
@@ -115,21 +152,31 @@ def _transform_data(ti):
     df_data.to_csv(full_path_csv, index=False)
 
     file_key = f'stage/{file_csv_name}'
-    upload_to_bucket(bucket_name=bucket_name, file_path=full_path_csv, file_key=file_key)
 
-    # Removendo arquivos temporarios
-    shutil.rmtree(local_path)
+    # Carregando CSV para o Storage
+    upload_to_bucket(bucket_name=bucket_name, file_path=full_path_csv, file_key=file_key)
 
     bucket_file_csv = f"{bucket_name}/{file_key}"
 
     ti.xcom_push(key='bucket-file-csv', value=bucket_file_csv)
 
-def _load_bigquery(tablename, ti):
+def _load_bigquery(tablename: str, ti:dict) -> None:
+    """
+    Funcao criada para carregar os dados do arquivo csv no BigQuery.
+
+    :param tablename: Nome da tabela do BigQuery onde serao carregado os dados
+    :param ti: Dicionario com os parametros referente a Task Instance (TI) das outras funcoes para disponibilizar variaveis de uma funcao para outra.
+
+    :return: None
+    :rtype: None
+    """
     from google.cloud import bigquery
 
+    # Carregando credenciais
     pk_path = Variable.get('etl_extract_users_pk')
     credentials = service_account.Credentials.from_service_account_file(pk_path)
 
+    # Buscando variaveis referente ao BihQuery
     projectId = Variable.get("etl_extract_users_projectId")
     datasetId = Variable.get("etl_extract_users_datasetId")
     bucket_file_csv = ti.xcom_pull(key='bucket-file-csv', task_ids='transform_data')
@@ -175,19 +222,21 @@ def _load_bigquery(tablename, ti):
             bigquery.SchemaField("picture_thumbnail", "STRING")
         ]
 
+    # Verifica se tabela ja existe. Caso contrario, cria uma tabela no BigQuery.
     try:
         client.get_table(tableId)
     except:
         table = bigquery.Table(tableId, schema=schema)
         table = client.create_table(table) 
 
+    # Carregando JOb Config para BigQuery
     job_config = bigquery.LoadJobConfig(
         schema=schema,
         skip_leading_rows=1,
         source_format=bigquery.SourceFormat.CSV,
     )
 
-    # URI do nosso arquiv .csv dentro do bucket
+    # URI do arquivo CSV dentro do Storage
     uri_csv = f"gs://{bucket_file_csv}"
 
     job = client.load_table_from_uri(uri_csv, tableId, job_config=job_config)
