@@ -48,7 +48,8 @@ def upload_to_bucket(bucket_name: str, file_path: str, file_key=None) -> None:
         blob = bucket.blob(file_key_name)
         blob.upload_from_filename(file_path)
     except Exception as e:
-        raise AirflowException(f"[ERROR] Erro no upload do arquivo: {e}")
+        print(f"[ERROR] Erro no upload do arquivo: {e}")
+        raise AirflowException()
 
 def _extract_data_api(url: str, ti: dict) -> str:
     """
