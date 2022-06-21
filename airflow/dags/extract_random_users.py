@@ -2,6 +2,7 @@ import datetime
 
 import logging
 import os
+import json
 
 import airflow
 from airflow.models import Variable
@@ -35,7 +36,8 @@ def upload_to_bucket(bucket_name: str, file_path: str, file_key=None) -> None:
     """
     # Carregando credenciais
     pk_path = Variable.get('etl_extract_users_pk')
-    credentials = service_account.Credentials.from_service_account_file(pk_path)
+    credentials = service_account.Credentials.from_service_account_info(json.loads(pk_path))
+    #credentials = Variable.get('etl_extract_users_pk')
 
     file_key_name = (file_path if (file_key==None) else file_key)
 
@@ -60,12 +62,11 @@ def _extract_data_api(url: str, ti: dict) -> str:
     :rtype: str 
     """
     import requests
-    import json
 
     # Request da API
     params= 'results'
     qtd_requests = Variable.get('etl_extract_users_requests')
-
+    
     response = requests.get(f'{url}/?{params}={qtd_requests}')
     data_json = response.json()
 
@@ -101,13 +102,12 @@ def _transform_data(ti: dict) -> str:
     :rtype: str 
     """
     import pandas as pd
-    import json
     import time
 
     # Carregando credenciais
     pk_path = Variable.get('etl_extract_users_pk')
-    credentials = service_account.Credentials.from_service_account_file(pk_path)
-
+    credentials = service_account.Credentials.from_service_account_info(json.loads(pk_path))
+ 
     # Buscando variaveis para upload do arquivo (objeto) no Storage
     bucket_name = Variable.get('etl_extract_users_bucket')
     json_object_key = ti.xcom_pull(key='bucket-file-json', task_ids='extract_data_random_user')
@@ -174,8 +174,8 @@ def _load_bigquery(tablename: str, ti:dict) -> None:
 
     # Carregando credenciais
     pk_path = Variable.get('etl_extract_users_pk')
-    credentials = service_account.Credentials.from_service_account_file(pk_path)
-
+    credentials = service_account.Credentials.from_service_account_info(json.loads(pk_path))
+    
     # Buscando variaveis referente ao BihQuery
     projectId = Variable.get("etl_extract_users_projectId")
     datasetId = Variable.get("etl_extract_users_datasetId")
@@ -278,4 +278,3 @@ with airflow.DAG('etl_extract_users', default_args=default_args, catchup=False) 
 
     # Fluxo de Execução da DAG
     start >> extract_data >> transform_data >> load_data_bq >> end
-
