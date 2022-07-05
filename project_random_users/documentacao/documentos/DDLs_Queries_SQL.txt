@@ -1,0 +1,75 @@
+-- Criação da tabela em Ambiente Bronze
+CREATE TABLE `projectrandomusers-001.bronze.users`( 
+	gender STRING, 
+	email STRING,
+	phone STRING,
+	cell STRING,
+	nat STRING,
+	name_title STRING,
+	name_first STRING,
+	name_last STRING,
+	location_street_number INT64,
+	location_street_name STRING,
+	location_city STRING,
+	location_state STRING,
+	location_country STRING,
+	location_postcode STRING,
+	location_coordinates_latitude STRING,
+	location_coordinates_longitude STRING,
+	location_timezone_offset STRING,
+	location_timezone_description STRING,
+	login_uuid STRING,
+	login_username STRING,
+	login_password STRING,
+	login_salt STRING,
+	login_md5 STRING,
+	login_sha1 STRING,
+	login_sha256 STRING,
+	dob_date STRING,
+	dob_age INT64,
+	registered_date STRING,
+	registered_age INT64,
+	id_name STRING,
+	id_value STRING,
+	picture_large STRING,
+	picture_medium STRING,
+	picture_thumbnail STRING
+	);
+
+-- Criação da tabela em Ambiente Silver
+CREATE TABLE `projectrandomusers-001.silver.users`(
+	gender STRING,
+	email STRING,
+	phone STRING,
+	cell STRING,
+	name_first STRING,
+	name_last STRING,
+	location_street_number INT64,
+	location_street_name STRING,
+	location_city STRING,
+	location_state STRING,
+	location_country STRING,
+	location_postcode STRING,
+	login_username STRING,
+	login_password STRING,
+	dob_date STRING,
+	age INT64
+	);
+
+Exemplos de Consultas:
+	
+-- Contagem de Generos
+SELECT GENDER, COUNT(GENDER)
+FROM `projectrandomusers-001.silver.users`
+GROUP BY GENDER
+
+-- Contagem de Nomes Iguais Por País
+SELECT NAME_FIRST, LOCATION_COUNTRY, COUNT(NAME_FIRST)
+FROM `projectrandomusers-001.silver.users`
+GROUP BY NAME_FIRST, LOCATION_COUNTRY
+
+-- Contagem de +50 Por País e Gênero
+SELECT LOCATION_COUNTRY, GENDER, COUNT(GENDER)
+FROM `projectrandomusers-001.silver.users`
+WHERE AGE >= 50
+GROUP BY LOCATION_COUNTRY, GENDER
